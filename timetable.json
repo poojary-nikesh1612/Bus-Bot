@@ -5,41 +5,47 @@
       "bus_name": "Rajkumar",
       "service_type": "Fixed",
       "via": "Farengipete (Highway)",
-      "schedule": [
+      "college_stand_schedule": [
         "07:00", "08:30", "11:30", "13:30", "15:30", "17:30", "20:30"
       ],
-      "note": "Route is Benjanapadav to Mangalore. Times are approximate (5-10 min flexibility).",
+      "main_stand_schedule": [],
+      "note": "This bus always stops at the college stand. Times are approximate (5-10 min flexibility).",
       "contact": "6362838704",
-      "keywords": ["mangalore", "farengipete", "rajkumar", "highway", "rk"]
+      "keywords": ["mangalore", "farengipete", "rajkumar", "highway", "rk","statebank","kadegoli"]
     },
     {
-      "name": "Mangalore ",
+      "name": "Mangalore",
       "bus_name": "Rajalaxmi",
       "service_type": "Variable",
       "via": "Nermarga",
-      "peak_schedule": {
-        "morning": ["08:05", "08:45"], "midday": [], "evening": []
-      },
-      "off_peak_message": "No scheduled buses come to the college stand. You must go to the Benjanapadav main stand (1km walk) OR call the conductor for an on-demand pickup.",
-      "note": "These are 'Variable' buses from BC Road. Times are approximate (5-10 min flexibility).",
+      "college_stand_schedule": [
+        "08:05", "08:45"
+      ],
+      "main_stand_schedule": [
+        "07:15", "07:45", "08:15", "08:45", "09:15", "09:45", "10:15", "10:45", "11:15", "11:45", "12:15", "12:45", "13:15", "13:45", "14:15", "14:45", "15:15", "15:45", "16:15", "16:45", "17:15", "17:45", "18:15", "18:45", "19:15", "19:45", "20:15"
+      ],
+      "note": "Only the first two morning buses come to the college stand. All others are at the Benjanapadav main stand (1km walk).",
       "contact": "6362838704",
-      "keywords": ["mangalore", "rajalaxmi", "nermarga", "rl"]
+      "keywords": ["mangalore", "rajalaxmi", "nermarga", "rl","statebank"]
     },
     {
       "name": "BC Road",
       "bus_name": "Rajalaxmi",
       "service_type": "Variable",
-      "peak_schedule": {
-        "morning": [],
-        "midday": ["13:00 (Sometimes)"],
-        "evening": [
-          "15:30", "16:00 (Sometimes)", "16:30", "17:00 (Sometimes)"
-        ]
-      },
-      "off_peak_message": "No scheduled buses come to the college stand (except the 1:00 PM, which is unreliable). You must go to the Benjanapadav main stand (1km walk) OR call the conductor for an on-demand pickup.",
-      "note": "These are 'Variable' buses from Mangalore. Times are approximate (5-10 min flexibility). The '(Sometimes)' buses are unreliable.",
+      "via": "Nermarga",
+      "college_stand_schedule": [
+        "13:00 (Sometimes)",
+        "15:30",
+        "16:00 (Sometimes)",
+        "16:30",
+        "17:00 (Sometimes)"
+      ],
+      "main_stand_schedule": [
+        "07:00", "07:30", "08:00", "08:30", "09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "12:00", "12:30", "13:00", "13:30", "14:00", "14:30", "15:00", "15:30", "16:00", "16:30", "17:00", "17:30", "18:00", "18:30", "19:00", "19:30", "20:00"
+      ],
+      "note": "Only the evening buses reliably come to the college stand. All others are at the Benjanapadav main stand (1km walk).",
       "contact": "6362838704",
-      "keywords": ["bc road", "rajalaxmi", "nermarga", "rl"]
+      "keywords": ["bc road", "rajalaxmi", "rl"]
     }
   ]
 }

@@ -5,19 +5,19 @@ import threading
 from flask import Flask, request, jsonify
 from datetime import datetime
 import google.generativeai as genai
-import pytz  # <-- 1. IMPORT PTYZ
+import pytz  
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# --- 1. CONFIGURATION ---
+
 app = Flask(__name__)
 
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
 META_WA_TOKEN = os.environ.get('META_WA_TOKEN')
 META_WA_PHONE_ID = os.environ.get('META_WA_PHONE_ID')
 META_VERIFY_TOKEN = os.environ.get('META_VERIFY_TOKEN')
-IST = pytz.timezone('Asia/Kolkata')  # <-- 2. DEFINE IST TIMEZONE
+IST = pytz.timezone('Asia/Kolkata') 
 
 try:
     genai.configure(api_key=GEMINI_API_KEY)
@@ -25,10 +25,9 @@ try:
 except Exception as e:
     print(f"Error configuring Gemini: {e}")
 
-# --- 2. META WEBHOOK VERIFICATION (GET REQUEST) ---
+#META WEBHOOK VERIFICATION (GET REQUEST) 
 @app.route("/whatsapp", methods=["GET"])
 def verify_webhook():
-    # (This function is unchanged)
     mode = request.args.get("hub.mode")
     token = request.args.get("hub.verify_token")
     challenge = request.args.get("hub.challenge")
@@ -40,9 +39,8 @@ def verify_webhook():
         print("WEBHOOK_VERIFICATION_FAILED")
         return "Verification failed", 403
 
-# --- 3. THE "WORKER" FUNCTION (Handles all logic) ---
+# THE "WORKER" FUNCTION (Handles all logic)
 def process_bot_logic(from_number, msg_body):
-    # (This function is unchanged, but the logic it calls is now fixed)
     print(f"WORKER: Processing message for {from_number}: {msg_body}")
     
     bot_reply = "" 
@@ -54,35 +52,21 @@ def process_bot_logic(from_number, msg_body):
         if intent == 'time_query':
             search_term = entities.get('search_term')
             time = entities.get('target_time')
-            bus_data = get_bus_info(search_term, time)
+            bus_data = get_bus_info(search_term, time) 
+            
             status = bus_data.get("status")
             
             if status == "found":
-                bot_reply = generate_friendly_reply(bus_data)
-            
-            elif status == "too_late":
-                last_bus_time_12hr = datetime.strptime(bus_data.get('last_bus_time'), '%H:%M').strftime('%I:%M %p')
-                target_time_12hr = datetime.strptime(time, '%H:%M').strftime('%I:%M %p')
-                bot_reply = f"Sorry, I couldn't find any buses for *{search_term}* after *{target_time_12hr}*.\n\nIt looks like the last bus of the day was at *{last_bus_time_12hr}*."
-
-            elif status == "not_found":
-                t_time_12hr = datetime.strptime(time, '%H:%M').strftime('%I:%M %p')
-                contact = bus_data.get('contact')
-                reply_parts = [
-                    f"Sorry, I couldn't find any buses for *{search_term}* after *{t_time_12hr}*.",
-                    f"{bus_data.get('off_peak_message')}\n",
-                    f"It's best to call the conductor to check: `{contact}`"
-                ]
-                bot_reply = "\n".join(reply_parts)
+                bot_reply = generate_friendly_reply(bus_data) 
             
             elif status == "no_route":
-                bot_reply = f"Sorry, I don't have any schedules for *'{entities.get('search_term')}'*. I only know about 'Mangalore', 'BC Road', and 'Farengipete'."
+                bot_reply = f"Sorry, I don't have any schedules for *'{search_term}'*. I only know about the Mangalore and BC Road buses that pass via Nermarga and Farengipete."
             
             else: 
                 bot_reply = "Sorry, something went wrong. Please try that again."
         
-        elif intent == 'general_question' or intent == 'chat':
-            bot_reply = generate_qa_reply(msg_body)
+        elif intent == 'chat':
+            bot_reply = generate_chat_reply(msg_body) 
             
         else:
             bot_reply = "Sorry, I'm not sure how to help with that. I'm best at finding bus times."
@@ -93,10 +77,9 @@ def process_bot_logic(from_number, msg_body):
         print(f"!!! WORKER THREAD FAILED: {e} !!!")
         send_whatsapp_message(from_number, "Oh no! My brain just glitched. Please try asking me again.")
 
-# --- 4. RECEIVE MESSAGES (POST REQUEST) - THE "CONTROLLER" ---
+#RECEIVE MESSAGES (POST REQUEST) - THE "CONTROLLER" 
 @app.route("/whatsapp", methods=["POST"])
 def receive_message():
-    # (This function is unchanged)
     try:
         body = request.get_json()
         if body.get("object") and body.get("entry"):
@@ -122,13 +105,9 @@ def receive_message():
         print(f"Error in receive_message (main): {e}")
         return "Error", 500
 
-# --- 5. GEMINI BRAIN 1 (NLP Entity Extraction) ---
+# GEMINI BRAIN 1 (NLP Entity Extraction) 
 def extract_entities_with_gemini(user_message):
-    """
-    NEW: This function now uses the IST timezone.
-    """
-    
-    # --- 3. GET THE CURRENT TIME IN IST ---
+  
     current_time_str = datetime.now(IST).strftime('%H:%M')
     
     system_prompt = f"""
@@ -136,10 +115,9 @@ def extract_entities_with_gemini(user_message):
     Your job is to analyze the user's message and return a JSON object.
     The current time is {current_time_str}.
 
-    You must determine one of three "intents":
-    1.  `time_query`: The user is asking for a bus at a specific time. (e.g., "bus to bc road now", "4pm mangalore bus")
-    2.  `general_question`: The user is asking a question *about* the buses. (e.g., "which bus is faster?", "how much is the fare?", "who are you?")
-    3.  `chat`: The user is just making small talk. (e.g., "hi", "thanks", "ok")
+    You must determine one of two "intents":
+    1.  `time_query`: The user is asking for a bus time. (e.g., "bus to bc road now", "4pm mangalore bus", "farengipete")
+    2.  `chat`: The user is just making small talk or asking a question I can't answer. (e.g., "hi", "thanks", "what is the fare?", "welcome aboard","best fast route")
 
     Based on the intent, return a JSON object:
     
@@ -150,10 +128,11 @@ def extract_entities_with_gemini(user_message):
         "target_time": "[HH:MM 24-hour time]"
       }}
       (If user says "now" or no time, use current time: {current_time_str})
+      (The search_term MUST be a location, like 'mangalore', 'bc road', 'farengipete', 'nermarga')
 
-    - If "intent" is `general_question` or `chat`:
+    - If "intent" is `chat`:
       {{
-        "intent": "general_question",
+        "intent": "chat",
         "search_term": null,
         "target_time": null
       }}
@@ -171,7 +150,6 @@ def extract_entities_with_gemini(user_message):
         raw_response_text = response.text
         
         print(f"Gemini Raw Response: {raw_response_text}")
-
         json_start = raw_response_text.find('{')
         json_end = raw_response_text.rfind('}') + 1
         
@@ -187,15 +165,15 @@ def extract_entities_with_gemini(user_message):
         print(f"Gemini API error: {e}")
         return {"intent": "chat", "search_term": None, "target_time": None}
 
-# --- 6. FACTUAL BRAIN (Bus Logic) ---
+#FACTUAL BRAIN (Bus Logic) 
 def get_bus_info(search_term, target_time_str):
-    # (This function is unchanged)
+    
     try:
         with open('timetable.json', 'r') as f:
             timetable = json.load(f)
     except Exception as e:
         print(f"CRITICAL ERROR loading timetable.json: {e}")
-        return {"status": "error", "message": "Sorry, my schedule file is broken."}
+        return {"status": "error"}
 
     if not search_term or not target_time_str:
         return {"status": "not_understood"}
@@ -214,65 +192,87 @@ def get_bus_info(search_term, target_time_str):
     if not found_route:
         return {"status": "no_route", "search_term": search_term}
 
-    all_buses_today = []
-    if found_route['service_type'] == 'Fixed':
-        all_buses_today.extend(found_route.get('schedule', []))
-    if found_route['service_type'] == 'Variable':
-        for period in found_route.get('peak_schedule', {}):
-            all_buses_today.extend(found_route['peak_schedule'][period])
-            
-    if not all_buses_today:
-        return {"status": "not_found", "search_term": search_term, "target_time": target_time_str, **found_route}
-
-    last_bus_str = all_buses_today[-1].split(' ')[0]
-    last_bus_time = datetime.strptime(last_bus_str, '%H:%M').time()
-
-    next_buses_list = []
-    for time_str in all_buses_today:
-        bus_time = datetime.strptime(time_str.split(' ')[0], '%H:%M').time()
-        if bus_time >= target_time:
-            next_buses_list.append(time_str)
     
-    if next_buses_list:
+    def find_next_buses(schedule, target):
+        next_buses = []
+        for time_str in schedule:
+            bus_time = datetime.strptime(time_str.split(' ')[0], '%H:%M').time()
+            if bus_time >= target:
+                next_buses.append(time_str)
+        return next_buses
+
+    college_buses = find_next_buses(found_route.get('college_stand_schedule', []), target_time)
+    main_stand_buses = find_next_buses(found_route.get('main_stand_schedule', []), target_time)
+    
+
+    if college_buses or main_stand_buses:
         return {
             "status": "found",
             "destination": found_route['name'],
             "target_time": target_time_str,
-            "buses": next_buses_list,
-            **found_route 
+            "college_buses": college_buses,
+            "main_stand_buses": main_stand_buses,
+            "note": found_route.get('note', ''),
+            "contact": found_route.get('contact', None),
+            "service_type": found_route.get('service_type')
         }
     else:
-        if target_time > last_bus_time:
-            return {
-                "status": "too_late",
-                "search_term": search_term,
-                "target_time": target_time_str,
-                "last_bus_time": last_bus_str,
-                **found_route
-            }
-        else:
-            return {
-                "status": "not_found",
-                "search_term": search_term,
-                "target_time": target_time_str,
-                **found_route
-            }
+        return {
+            "status": "found", 
+            "destination": found_route['name'],
+            "target_time": target_time_str,
+            "college_buses": [], 
+            "main_stand_buses": [],
+            "note": found_route.get('note', ''),
+            "contact": found_route.get('contact', None),
+            "service_type": found_route.get('service_type')
+        }
 
-# --- 7. GEMINI BRAIN 2 (Friendly Reply Writer) ---
+# GEMINI BRAIN 2 (Friendly Reply Writer)
 def generate_friendly_reply(bus_data):
-    # (This function is unchanged)
+    
     bus_data_json = json.dumps(bus_data, indent=2)
     
     system_prompt = f"""
-    You are a friendly and helpful bus assistant...
-    ...
+    You are "Baby" (B.A.B.Y.), a friendly bus assistant for Canara Engineering College.
+    Your job is to write a clear, helpful, and concise reply based on the data I provide.
+
+    HERE IS THE BUS DATA:
+    {bus_data_json}
+
+    ---
+    YOUR TASK:
+    Write a friendly, formatted reply for the student.
+
     RULES FOR THE REPLY:
-    ...
-    8.  ***TIME FORMAT RULE (CRITICAL):***
-        * You **MUST** convert all 24-hour times...
+    1.  Be conversational and friendly.
+    2.  Use WhatsApp formatting (*bold*, _italics_, ```monospace```).
+    3.  **TIME FORMAT (CRITICAL):** Convert ALL 24-hour times (e.g., '16:30', '08:05') into a friendly 12-hour format (e.g., '4:30 PM', '8:05 AM').
+    4.  If a bus time has "(Sometimes)", add a ⚠️ warning emoji.
+    5.  Start by confirming their request (e.g., "Hey there! Looking for buses to [Destination] around [Time]?").
+
+    ***LOGIC FOR BUS LISTS (VERY IMPORTANT):***
+    
+    * **Case 1: BOTH lists have buses.**
+        * First, list the `college_buses` under a heading like "✅ *At the College Stand*".
+        * Second, list the `main_stand_buses` under a heading like "🚶 *At the Benjanapadavu bus Stand (1km walk)*".
+    
+    * **Case 2: ONLY `college_buses` are found.**
+        * Just list them. Don't mention the main stand.
+    
+    * **Case 3: ONLY `main_stand_buses` are found.**
+        * State clearly that no buses are coming to the college.
+        * List the `main_stand_buses` under the "🚶 *At the Benjanapadavu bus Stand (1km walk)*" heading.
+    
+    * **Case 4: BOTH lists are EMPTY.**
+        * State that you couldn't find any more buses for that route today.
+        * Show the "note" from the data, as it's the last piece of info.
+
+    ***PHONE NUMBER RULE:***
+    * **ONLY** show the 'contact' number if the `service_type` is `Variable` OR if any bus time has `(Sometimes)` in it. Do not show it for "Fixed" buses.
     ---
     
-    Write the final reply. Do not include the JSON.
+    Write the final reply which need to be original and friendly wihtout any non-sense, unwanted characters. Do not include the JSON.
     """
     
     try:
@@ -286,40 +286,33 @@ def generate_friendly_reply(bus_data):
     
     except Exception as e:
         print(f"Gemini (Writer) API error: {e}")
-        return json.dumps(bus_data, indent=2) 
+        # Fallback in case AI fails
+        return "Sorry, I found the bus info but had trouble writing the reply. Please try again."
 
-# --- 8. GEMINI BRAIN 3 (The "Helpful Senior" QA) --- 
-def generate_qa_reply(user_message):
-    """
-    NEW: This function now knows the bus fare.
-    """
-    
+#GEMINI BRAIN 3 (Small Talk)
+def generate_chat_reply(user_message):
+
     system_prompt = f"""
-    You are "Baby" (B.A.B.Y. = Benjanapadavu Area Bus Yatra), a helpful bus bot for Canara Engineering College (CEC).
+    You are "Baby" (B.A.B.Y. = Bot-Assisted Bus Yatra), a helpful bus bot for Canara Engineering College (CEC).
     You are NOT just a database. You are a "helpful senior" with all the local knowledge.
 
     YOUR KNOWLEDGE BASE:
     - You know the schedules for two main routes: Mangalore and BC Road.
-    - The *Rajkumar* bus is the FAST route to Mangalore (via Farengipete).
-    - The *Rajalaxmi* bus is the SLOW route (via Nermarga/Polali).
-    
-    - --- NEW FARE INFO ---
-    - The fare to BC Road is about *₹10 for students* and *₹20 for normal people*.
-    - The Mangalore fare is similar.
-    - --- END NEW FARE INFO ---
-    
-    - The buses are private, not government.
-    - Your job is to answer bus *time* questions, but also *general questions*.
+    - The *Rajkumar* bus is the FAST route to Mangalore. It takes the highway via Farengipete.
+    - The *Rajalaxmi* bus is the SLOW route. It goes through Nermarga.
+    - The fare is cheap ₹10 for bc road for students and for mangalore maybe ₹15-₹30, but you don't know the exact price.
+    - The buses are private, not government. They don't have AC.
+    - Your job is to answer bus *time* questions, but also *general questions* about the buses.
     
     YOUR TASK:
-    A user just sent a message that is NOT a time query.
+    A user just sent a message that is NOT a time query. It's either small talk (hi, thanks) or a general question (which bus is faster?).
     
     RULES:
     1.  Be friendly, conversational, and helpful. Use emojis.
     2.  Keep your reply short (2-3 sentences).
     3.  If they say "hi", "hello", etc., greet them back.
-    4.  If they say "thanks", "thank you", etc., say "You're welcome! Happy to help! 😊"
-    5.  If they ask a *question* (like "which bus is faster?" or "how much is the fare?"), answer it using your KNOWLEDGE BASE.
+    4.  If they say "thanks", "thank you", etc., say "You're welcome! Happy to help!, 😊"
+    5.  If they ask a *question* (like "which bus is faster?" or "who are you?"), answer it using your KNOWLEDGE BASE.
     6.  If you *don't* know the answer, just say "Sorry, I'm not sure about that! I'm best at finding bus times."
     7.  If you greet them, gently remind them what you do. (e.g., "Hey there! I'm Baby, the CEC bus bot. Ask me for bus times!")
     
@@ -341,9 +334,10 @@ def generate_qa_reply(user_message):
         print(f"Gemini (Chat) API error: {e}")
         return "Sorry, I'm not sure how to reply to that! I'm best at finding bus times."
 
-# --- 9. SEND MESSAGE FUNCTION (Talks to Meta) ---
+    
+
+# SEND MESSAGE FUNCTION (Talks to Meta)
 def send_whatsapp_message(to_number, message_text):
-    # (This function is unchanged)
     if not message_text:
         print("ERROR: Tried to send an empty message.")
         return
