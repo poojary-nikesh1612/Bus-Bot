@@ -1,4 +1,4 @@
-# 🚌 Bus-Bot(Benjanapadavu Area Bus Yatra)
+# 🚌 BABY(Bot-Assisted Bus Yatra)
 
 A smart WhatsApp chatbot using the Google Gemini API and Python (Flask) to provide conversational, real-time bus schedules for Canara Engineering College (CEC).
 
