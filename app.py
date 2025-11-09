@@ -39,7 +39,7 @@ def verify_webhook():
         print("WEBHOOK_VERIFICATION_FAILED")
         return "Verification failed", 403
 
-# THE "WORKER" FUNCTION (Handles all logic)
+#THE "WORKER" FUNCTION (Handles all logic)
 def process_bot_logic(from_number, msg_body):
     print(f"WORKER: Processing message for {from_number}: {msg_body}")
     
@@ -165,9 +165,9 @@ def extract_entities_with_gemini(user_message):
         print(f"Gemini API error: {e}")
         return {"intent": "chat", "search_term": None, "target_time": None}
 
-#FACTUAL BRAIN (Bus Logic) 
+#FACTUAL BRAIN (Bus Logic)
 def get_bus_info(search_term, target_time_str):
-    
+
     try:
         with open('timetable.json', 'r') as f:
             timetable = json.load(f)
@@ -183,16 +183,8 @@ def get_bus_info(search_term, target_time_str):
     except ValueError:
         return {"status": "not_understood"}
 
-    found_route = None
-    for route in timetable['routes']:
-        if search_term.lower() in route['keywords']:
-            found_route = route
-            break 
-    
-    if not found_route:
-        return {"status": "no_route", "search_term": search_term}
+    found_routes_data = []
 
-    
     def find_next_buses(schedule, target):
         next_buses = []
         for time_str in schedule:
@@ -201,41 +193,42 @@ def get_bus_info(search_term, target_time_str):
                 next_buses.append(time_str)
         return next_buses
 
-    college_buses = find_next_buses(found_route.get('college_stand_schedule', []), target_time)
-    main_stand_buses = find_next_buses(found_route.get('main_stand_schedule', []), target_time)
+    for route in timetable['routes']:
+        if search_term.lower() in route['keywords']: 
+            college_buses = find_next_buses(route.get('college_stand_schedule', []), target_time)
+            main_stand_buses = find_next_buses(route.get('main_stand_schedule', []), target_time)
+            
+            if college_buses or main_stand_buses or route.get('note'):
+                route_data = {
+                    "name": route['name'],
+                    "bus_name": route['bus_name'],
+                    "service_type": route['service_type'],
+                    "via": route['via'],
+                    "college_buses": college_buses,
+                    "main_stand_buses": main_stand_buses,
+                    "note": route.get('note', ''),
+                    "contact": route.get('contact', None)
+                }
+                found_routes_data.append(route_data)
+
+    if not found_routes_data:
+        return {"status": "no_route", "search_term": search_term}
     
+    return {
+        "status": "found",
+        "search_term": search_term,
+        "target_time": target_time_str,
+        "routes": found_routes_data 
+    }
 
-    if college_buses or main_stand_buses:
-        return {
-            "status": "found",
-            "destination": found_route['name'],
-            "target_time": target_time_str,
-            "college_buses": college_buses,
-            "main_stand_buses": main_stand_buses,
-            "note": found_route.get('note', ''),
-            "contact": found_route.get('contact', None),
-            "service_type": found_route.get('service_type')
-        }
-    else:
-        return {
-            "status": "found", 
-            "destination": found_route['name'],
-            "target_time": target_time_str,
-            "college_buses": [], 
-            "main_stand_buses": [],
-            "note": found_route.get('note', ''),
-            "contact": found_route.get('contact', None),
-            "service_type": found_route.get('service_type')
-        }
-
-# GEMINI BRAIN 2 (Friendly Reply Writer)
+#GEMINI BRAIN 2 (Friendly Reply Writer)
 def generate_friendly_reply(bus_data):
-    
     bus_data_json = json.dumps(bus_data, indent=2)
     
     system_prompt = f"""
     You are "Baby" (B.A.B.Y.), a friendly bus assistant for Canara Engineering College.
-    Your job is to write a clear, helpful, and concise reply based on the data I provide.
+    Your job is to be a smart assistant. I will give you a JSON object with a "routes" list.
+    Your task is to compare these routes and present the options clearly.
 
     HERE IS THE BUS DATA:
     {bus_data_json}
@@ -245,38 +238,36 @@ def generate_friendly_reply(bus_data):
     Write a friendly, formatted reply for the student.
 
     RULES FOR THE REPLY:
-    1.  Be conversational and friendly.
-    2.  Use WhatsApp formatting (*bold*, _italics_, ```monospace```).
+    1.  Be conversational, original, friendly, and without any non-sense or unwanted characters.
+    2.  Use WhatsApp formatting (*bold*, _italics_, ```monospace```). (Note: I cannot make numbers blue, but I will format them clearly).
     3.  **TIME FORMAT (CRITICAL):** Convert ALL 24-hour times (e.g., '16:30', '08:05') into a friendly 12-hour format (e.g., '4:30 PM', '8:05 AM').
     4.  If a bus time has "(Sometimes)", add a ⚠️ warning emoji.
-    5.  Start by confirming their request (e.g., "Hey there! Looking for buses to [Destination] around [Time]?").
-
-    ***LOGIC FOR BUS LISTS (VERY IMPORTANT):***
+    5.  Start by confirming their request (e.g., "Hey there! Looking for buses to {bus_data['search_term']} around [Time]?").
     
-    * **Case 1: BOTH lists have buses.**
-        * First, list the `college_buses` under a heading like "✅ *At the College Stand*".
-        * Second, list the `main_stand_buses` under a heading like "🚶 *At the Benjanapadavu bus Stand (1km walk)*".
+    ***LOGIC FOR YOUR REPLY (VERY IMPORTANT):***
     
-    * **Case 2: ONLY `college_buses` are found.**
-        * Just list them. Don't mention the main stand.
+    * **Step 1: Acknowledge.** Start by confirming their request (e.g., "Okay! I found a couple of options for *{bus_data['search_term']}* after *[Time]*:").
     
-    * **Case 3: ONLY `main_stand_buses` are found.**
-        * State clearly that no buses are coming to the college.
-        * List the `main_stand_buses` under the "🚶 *At the Benjanapadavu bus Stand (1km walk)*" heading.
+    * **Step 2: Present Each Route.** Go through the `routes` list, one by one.
     
-    * **Case 4: BOTH lists are EMPTY.**
-        * State that you couldn't find any more buses for that route today.
-        * Show the "note" from the data, as it's the last piece of info.
-
-    ***PHONE NUMBER RULE:***
-    * **ONLY** show the 'contact' number if the `service_type` is `Variable` OR if any bus time has `(Sometimes)` in it. Do not show it for "Fixed" buses.
+    * **Step 3: For each route,** create a "card" or section. Start with a bold heading.
+        * *Good Example:* "🚌 *Option 1: Rajkumar (The Fast Route via Farengipete)*"
+        * *Good Example:* "🚌 *Option 2: Rajalaxmi (The Slow Route via Nermarga)*"
+    
+    * **Step 4: List buses.** Inside each route's "card", show the buses.
+        * If `college_buses` exist, list them under "✅ *At the College Stand*".
+        * If `main_stand_buses` exist, list them under "🚶 *At the Benjanapadavu bus Stand (1km walk)*".
+        * If both lists are empty for a route, just say "No more buses for this route today."
+            
+    * **Step 5: Add Notes/Contact.** After the bus lists for a route, add the `note`.
+    * **Phone Number Rule:** ONLY show the `contact` number if the `service_type` is `Variable` or a bus has `(Sometimes)`. When you show it, mention it's for the *conductor*, not you.
     ---
     
-    Write the final reply which need to be original and friendly wihtout any non-sense, unwanted characters. Do not include the JSON.
+    Write the final reply. Do not include the JSON.
     """
     
     try:
-        model = genai.GenerativeModel('gemini-2.5-flash')
+        model = genai.GenerativeModel('gemini-2.5-flash') 
         response = model.generate_content(system_prompt)
         
         reply_text = response.text.replace("```", "")
