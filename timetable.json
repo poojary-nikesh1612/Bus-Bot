@@ -32,7 +32,7 @@
       "name": "BC Road",
       "bus_name": "Rajalaxmi",
       "service_type": "Variable",
-      "via": "Nermarga",
+      "via": "Kalpane",
       "college_stand_schedule": [
         "13:00 (Sometimes)",
         "15:30",
@@ -45,7 +45,7 @@
       ],
       "note": "Only the evening buses reliably come to the college stand. All others are at the Benjanapadav main stand (1km walk).",
       "contact": "6362838704",
-      "keywords": ["bc road", "rajalaxmi", "rl"]
+      "keywords": ["bc road", "rajalaxmi", "rl","kalpane"]
     }
   ]
 }
